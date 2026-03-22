@@ -1,3 +1,5 @@
+#define _XOPEN_SOURCE 700
+
 /******************************************************************************
  * Laboratoire 5
  * GIF-3004 Systèmes embarqués temps réel
@@ -12,6 +14,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <math.h>
+#include <errno.h>
 
 #include "utils.h"
 #include "emulateurClavier.h"
@@ -26,9 +29,9 @@ static void* threadFonctionClavier(void* args){
 
     // Vous devez ensuite attendre sur la barriere passee dans les arguments
     // pour etre certain de commencer au meme moment que le thread lecteur
-
-    // TODO
-
+    
+    // TODO : test
+    pthread_barrier_wait(infos->barriere);
     // Finalement, ecrivez dans cette boucle la logique du thread, qui doit:
     // 1) Tenter d'obtenir une requete depuis le tampon circulaire avec consommerDonnee()
     // 2) S'il n'y en a pas, attendre un cours laps de temps (par exemple usleep(500))
@@ -37,7 +40,14 @@ static void* threadFonctionClavier(void* args){
     //      la requete est maintenant terminee
 
     while(1){
-       // TODO
+        struct requete req = {0};
+        int ret = consommerDonnee(&req);
+        if(ret == 1){
+            ecrireCaracteres(infos->pointeurClavier, req.data, req.taille, infos->tempsTraitementParCaractereMicroSecondes);
+            free(req.data);
+        } else if(ret == 0){
+            usleep(500);
+        }
     }
     return NULL;
 }
@@ -55,8 +65,8 @@ static void* threadFonctionLecture(void *args){
     // Vous devez ensuite attendre sur la barriere passee dans les arguments
     // pour etre certain de commencer au meme moment que le thread lecteur
 
-    // TODO
-
+    // TODO : test
+    pthread_barrier_wait(infos->barriere);
     // Finalement, ecrivez dans cette boucle la logique du thread, qui doit:
     // 1) Remplir setFd en utilisant FD_ZERO et FD_SET correctement, pour faire en sorte
     //      d'attendre sur infos->pipeFd
@@ -68,16 +78,92 @@ static void* threadFonctionLecture(void *args){
     //      l'inserer dans le tampon circulaire. Notez que le caractere EOT ne doit PAS se
     //      retrouver dans le champ data de la requete! N'oubliez pas egalement de donner
     //      la bonne valeur aux champs taille et tempsReception.
+    char buff[100];
+    char *message = malloc(256);
+    size_t messageCapacite = 256;
+    size_t messageTaille = 0;
+
+    if(message == NULL){
+        perror("Erreur d'allocation memoire");
+        return NULL;
+    }
 
     while(1){
-        // TODO
+        FD_ZERO(&setFd);
+        FD_SET(infos->pipeFd, &setFd);
+        int s = select(nfds, &setFd, NULL, NULL, NULL); // dernier NULL : pas de timeout
+        if (s < 0){
+            if(errno == EINTR){
+                continue;
+            }
+            perror("Erreur select");
+            break;
+        }
+
+        if (s > 0 && FD_ISSET(infos->pipeFd, &setFd)){
+            ssize_t n = read(infos->pipeFd, buff, sizeof(buff));
+
+            if (n < 0){
+                if(errno == EINTR){
+                    continue;
+                }
+                perror("Erreur read");
+                break;
+            }
+
+            if (n == 0){
+                usleep(500);
+                continue;
+            }
+
+            for (ssize_t i = 0; i < n; i++){
+                if ((unsigned char)buff[i] == 0x4){
+                    struct requete req = {0};
+                    req.tempsReception = get_time();
+                    req.taille = messageTaille;
+                    req.data = NULL;
+
+                    if (messageTaille > 0){
+                        req.data = malloc(messageTaille);
+                        if(req.data == NULL){
+                            perror("Erreur d'allocation memoire");
+                            messageTaille = 0;
+                            continue;
+                        }
+                        memcpy(req.data, message, messageTaille);
+                    }
+
+                    if(insererDonnee(&req) != 0){
+                        free(req.data);
+                    }
+
+                    messageTaille = 0;
+                } else {
+                    if (messageTaille == messageCapacite){
+                        size_t nouvelleCapacite = messageCapacite * 2;
+                        char *nouveauMessage = realloc(message, nouvelleCapacite);
+                        if(nouveauMessage == NULL){
+                            perror("Erreur de reallocation memoire");
+                            messageTaille = 0;
+                            continue;
+                        }
+                        message = nouveauMessage;
+                        messageCapacite = nouvelleCapacite;
+                    }
+                    message[messageTaille++] = buff[i];
+                }
+            }
+        }
     }
+
+    free(message);
     return NULL;
 }
 
 int main(int argc, char* argv[]){
     if(argc < 4){
         printf("Pas assez d'arguments! Attendu : ./emulateurClavier cheminPipe tempsAttenteParPaquet tailleTamponCirculaire\n");
+        return -1;
     }
 
     // A ce stade, vous pouvez consider que:
@@ -99,10 +185,10 @@ int main(int argc, char* argv[]){
         return -1;
     }
 
-    // création objet FILE pour passer en argument au thread clavier
-    FILE* file_fd = fdopen(fd, "r");
+    // Création du pointeur vers le clavier virtuel USB
+    FILE* file_fd = initClavier();
     if (file_fd == NULL){
-        perror("Erreur de conversion du descripteur de fichier en FILE*");
+        perror("Erreur d'ouverture du clavier virtuel");
         close(fd);
         return -1;
     }
@@ -111,10 +197,11 @@ int main(int argc, char* argv[]){
     
     // TODO : test
     pthread_barrier_t barriere;
-    int res = pthread_barrier_init(barriere, NULL, 2); // count=2 (thread clavier et lecteur)
+    int res = pthread_barrier_init(&barriere, NULL, 2); // count=2 (thread clavier et lecteur)
     if (res != 0){
         perror("Erreur d'initialisation de la barrière");
         close(fd);
+        fclose(file_fd);
         return -1;
     }
 
@@ -126,6 +213,7 @@ int main(int argc, char* argv[]){
     if (res == -1){
         perror("Erreur d'initialisation du tampon");
         close(fd);
+        fclose(file_fd);
         pthread_barrier_destroy(&barriere);
         return -1;
     }
@@ -133,36 +221,33 @@ int main(int argc, char* argv[]){
     
     // TODO : test
     pthread_t clavier;
-    struct infoThreadClavier *infosClavier;
-    infosClavier->barriere = &barriere;
-    infosClavier->pointeurClavier = file_fd;
-    infosClavier->tempsTraitementParCaractereMicroSecondes = atoi(argv[2]);
-    res = pthread_create(&clavier, NULL, threadFonctionClavier, (void *)infosClavier);
-    if (res == 0){
-        pthread_join(clavier, NULL);
-    }
-    else {
+    struct infoThreadClavier infosClavier = {0};
+    infosClavier.barriere = &barriere;
+    infosClavier.pointeurClavier = file_fd;
+    infosClavier.tempsTraitementParCaractereMicroSecondes = atoi(argv[2]);
+    res = pthread_create(&clavier, NULL, threadFonctionClavier, (void *)&infosClavier);
+    if (res != 0) {
         fprintf(stderr, "Erreur de création du thread clavier: %s\n", strerror(res));
         close(fd);
+        fclose(file_fd);
         pthread_barrier_destroy(&barriere);
         freeMemoireTampon();
         return -1;
     }
 
     pthread_t lecteur;
-    struct infoThreadLecture *infosLecteur;
-    infosLecteur->barriere = &barriere;
-    infosLecteur->pipeFd = fd;
-    res = pthread_create(&lecteur, NULL, threadFonctionLecture, (void *)infosLecteur);
-    if (res == 0){
-        pthread_join(lecteur, NULL);
-    }
-    else {
+    struct infoThreadLecture infosLecteur = {0};
+    infosLecteur.barriere = &barriere;
+    infosLecteur.pipeFd = fd;
+    res = pthread_create(&lecteur, NULL, threadFonctionLecture, (void *)&infosLecteur);
+    if (res != 0) {
         fprintf(stderr, "Erreur de création du thread lecteur: %s\n", strerror(res));
+        pthread_cancel(clavier);
+        pthread_join(clavier, NULL);
         close(fd);
+        fclose(file_fd);
         pthread_barrier_destroy(&barriere);
         freeMemoireTampon();
-        pthread_cancel(clavier);
         return -1;
     }
 
