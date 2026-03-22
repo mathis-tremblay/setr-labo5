@@ -91,20 +91,80 @@ int main(int argc, char* argv[]){
     //
     // 1) Ouvrir le named pipe
 
-    // TODO
+    // TODO : test
+    const char *chemin_pipe = argv[1];
+    int fd = open(chemin_pipe, O_RDONLY); // TODO: confirmer si ouvrir en écriture nécessaire
+    if (fd == -1){
+        perror("Erreur d'ouverture du pipe");
+        return -1;
+    }
+
+    // création objet FILE pour passer en argument au thread clavier
+    FILE* file_fd = fdopen(fd, "r");
+    if (file_fd == NULL){
+        perror("Erreur de conversion du descripteur de fichier en FILE*");
+        close(fd);
+        return -1;
+    }
 
     // 2) Declarer et initialiser la barriere
     
-    // TODO
+    // TODO : test
+    pthread_barrier_t barriere;
+    int res = pthread_barrier_init(barriere, NULL, 2); // count=2 (thread clavier et lecteur)
+    if (res != 0){
+        perror("Erreur d'initialisation de la barrière");
+        close(fd);
+        return -1;
+    }
 
     // 3) Initialiser le tampon circulaire avec la bonne taille
 
-    // TODO
-
+    // TODO : test
+    size_t taille_tampon = atoi(argv[3]);
+    res = initTamponCirculaire(taille_tampon);
+    if (res == -1){
+        perror("Erreur d'initialisation du tampon");
+        close(fd);
+        pthread_barrier_destroy(&barriere);
+        return -1;
+    }
     // 4) Creer et lancer les threads clavier et lecteur, en leur passant les bons arguments dans leur struct de configuration respective
     
-    // TODO
+    // TODO : test
+    pthread_t clavier;
+    struct infoThreadClavier *infosClavier;
+    infosClavier->barriere = &barriere;
+    infosClavier->pointeurClavier = file_fd;
+    infosClavier->tempsTraitementParCaractereMicroSecondes = atoi(argv[2]);
+    res = pthread_create(&clavier, NULL, threadFonctionClavier, (void *)infosClavier);
+    if (res == 0){
+        pthread_join(clavier, NULL);
+    }
+    else {
+        fprintf(stderr, "Erreur de création du thread clavier: %s\n", strerror(res));
+        close(fd);
+        pthread_barrier_destroy(&barriere);
+        freeMemoireTampon();
+        return -1;
+    }
 
+    pthread_t lecteur;
+    struct infoThreadLecture *infosLecteur;
+    infosLecteur->barriere = &barriere;
+    infosLecteur->pipeFd = fd;
+    res = pthread_create(&lecteur, NULL, threadFonctionLecture, (void *)infosLecteur);
+    if (res == 0){
+        pthread_join(lecteur, NULL);
+    }
+    else {
+        fprintf(stderr, "Erreur de création du thread lecteur: %s\n", strerror(res));
+        close(fd);
+        pthread_barrier_destroy(&barriere);
+        freeMemoireTampon();
+        pthread_cancel(clavier);
+        return -1;
+    }
 
     // La boucle de traitement est deja implementee pour vous. Toutefois, si vous voulez eviter l'affichage des statistiques
     // (qui efface le terminal a chaque fois), vous pouvez commenter la ligne afficherStats().

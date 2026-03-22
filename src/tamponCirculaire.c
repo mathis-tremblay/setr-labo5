@@ -61,7 +61,7 @@ int initTamponCirculaire(size_t taille){
 
     // Initialiser le mutex
     if (pthread_mutex_init(&mutexTampon, NULL) != 0) {
-        free(memoire);
+        freeMemoireTampon();
         memoire = NULL;
         return -1;
     }
@@ -112,8 +112,7 @@ void calculeStats(struct statistiques *stats){
     pthread_mutex_lock(&mutexTampon);
 
     // Aller chercher le temps actuel
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    tempsActuel = (double)ts.tv_sec + (double)ts.tv_nsec * 1e-9;
+    tempsActuel = get_time();
 
     // Calculer la durée de la période
     deltaT = tempsActuel - tempsDebutPeriode;
@@ -219,8 +218,7 @@ int consommerDonnee(struct requete *req){
     *req = *source;
 
     // Mettre à jour les statistiques
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    tempsActuel = (double)ts.tv_sec + (double)ts.tv_nsec * 1e-9;
+    tempsActuel = get_time();
 
     sommeTempsAttente += (tempsActuel - req->tempsReception);
     nombreRequetesTraitees++;
@@ -239,4 +237,8 @@ unsigned int longueurFile(){
     // Retourne la longueur courante de la file contenue dans votre tampon circulaire.
     
     return longueurCourante;
+}
+
+void freeMemoireTampon(){
+    free(memoire);
 }

@@ -45,4 +45,6 @@ int consommerDonnee(struct requete *req);
 // Retourne la longueur courante de la file d'attente (le nombre de requetes en attente)
 unsigned int longueurFile();
 
+void freeMemoireTampon();
+
 #endif
