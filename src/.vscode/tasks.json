@@ -1,0 +1,27 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "syncAndStartGDB",
+            "type": "shell",
+            "command": "./syncAndStartGDB.sh ${workspaceFolder} emulateurClavier 4560",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "toutSynchroniser",
+            "type": "shell",
+            "command": "./syncAndStartGDB.sh ${workspaceFolder} all",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": []
+        }
+    ]
+}

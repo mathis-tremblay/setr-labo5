@@ -50,6 +50,9 @@ int initTamponCirculaire(size_t taille){
 
     // TODO (DONE)
     // Mémoire du tampon circulaire
+    if (taille == 0) {
+        return -1;
+    }
     memoire = (char*)calloc(taille, sizeof(struct requete));
     // on regarde si on renvoie une valeur null (donc le calloc s'est pas fait correctement)
     if (memoire == NULL) {
@@ -58,6 +61,7 @@ int initTamponCirculaire(size_t taille){
     posLecture = 0;
     posEcriture = 0;
     longueurCourante = 0;
+    memoireTaille = taille;
 
     // Initialiser le mutex
     if (pthread_mutex_init(&mutexTampon, NULL) != 0) {
@@ -105,7 +109,6 @@ void calculeStats(struct statistiques *stats){
     double rho;
 };
 */
-    struct timespec ts;
     double tempsActuel;
     double deltaT;
 
@@ -122,8 +125,8 @@ void calculeStats(struct statistiques *stats){
 
     // Remplir la structure de statistiques
     stats->nombreRequetesEnAttente = longueurCourante;
-    stats->nombreRequetesTraitees = nombreRequetesTraitees;
-    stats->nombreRequetesPerdues = nombreRequetesPerdues;
+    stats->nombreRequetesTraitees += nombreRequetesTraitees;
+    stats->nombreRequetesPerdues += nombreRequetesPerdues;
 
     if (nombreRequetesTraitees > 0) {
         stats->tempsTraitementMoyen = sommeTempsAttente / nombreRequetesTraitees;
@@ -200,7 +203,6 @@ int insererDonnee(struct requete *req){
 
 int consommerDonnee(struct requete *req){
     struct requete *source;
-    struct timespec ts;
     double tempsActuel;
 
     pthread_mutex_lock(&mutexTampon);
@@ -241,4 +243,5 @@ unsigned int longueurFile(){
 
 void freeMemoireTampon(){
     free(memoire);
+    memoireTaille = 0;
 }

@@ -1,5 +1,3 @@
-#define _XOPEN_SOURCE 700
-
 /******************************************************************************
  * Laboratoire 5
  * GIF-3004 Systèmes embarqués temps réel
@@ -176,7 +174,7 @@ int main(int argc, char* argv[]){
     // Vous avez plusieurs taches d'initialisation a faire :
     //
     // 1) Ouvrir le named pipe
-
+    printf("Début programme.\n");
     // TODO : test
     const char *chemin_pipe = argv[1];
     int fd = open(chemin_pipe, O_RDONLY); // TODO: confirmer si ouvrir en écriture nécessaire
@@ -184,6 +182,7 @@ int main(int argc, char* argv[]){
         perror("Erreur d'ouverture du pipe");
         return -1;
     }
+    printf("Pipe ouvert avec succès.\n");
 
     // Création du pointeur vers le clavier virtuel USB
     FILE* file_fd = initClavier();
@@ -192,6 +191,7 @@ int main(int argc, char* argv[]){
         close(fd);
         return -1;
     }
+    printf("Clavier virtuel ouvert avec succès.\n");
 
     // 2) Declarer et initialiser la barriere
     
@@ -204,6 +204,7 @@ int main(int argc, char* argv[]){
         fclose(file_fd);
         return -1;
     }
+    printf("Barrière initialisée avec succès.\n");
 
     // 3) Initialiser le tampon circulaire avec la bonne taille
 
@@ -217,6 +218,7 @@ int main(int argc, char* argv[]){
         pthread_barrier_destroy(&barriere);
         return -1;
     }
+    printf("Tampon circulaire initialisé avec succès.\n");
     // 4) Creer et lancer les threads clavier et lecteur, en leur passant les bons arguments dans leur struct de configuration respective
     
     // TODO : test
@@ -234,6 +236,7 @@ int main(int argc, char* argv[]){
         freeMemoireTampon();
         return -1;
     }
+    printf("Thread clavier créé avec succès.\n");
 
     pthread_t lecteur;
     struct infoThreadLecture infosLecteur = {0};
@@ -250,6 +253,7 @@ int main(int argc, char* argv[]){
         freeMemoireTampon();
         return -1;
     }
+    printf("Thread lecteur créé avec succès.\n");
 
     // La boucle de traitement est deja implementee pour vous. Toutefois, si vous voulez eviter l'affichage des statistiques
     // (qui efface le terminal a chaque fois), vous pouvez commenter la ligne afficherStats().

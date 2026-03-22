@@ -86,7 +86,7 @@ int ecrireCaracteres(FILE* periphClavier, const char* caracteres, size_t len, un
     // emulateurClavier.h
     
     // Sert à parcourir le buffer caracteres (Indice)
-    size_t i;
+    size_t i = 0;
 
     // Compteur de resultats (au debut on a rien ecrit)
     int nbCaracteresEcrits = 0;
