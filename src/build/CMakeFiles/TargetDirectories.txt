@@ -1,3 +1,0 @@
-/home/setr/projets/setr-labo5/src/build/CMakeFiles/emulateurClavier.dir
-/home/setr/projets/setr-labo5/src/build/CMakeFiles/edit_cache.dir
-/home/setr/projets/setr-labo5/src/build/CMakeFiles/rebuild_cache.dir
