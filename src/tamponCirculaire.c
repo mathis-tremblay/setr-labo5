@@ -8,7 +8,8 @@
  ******************************************************************************/
 
 #include "tamponCirculaire.h"
-
+//#define _POSIX_C_SOURCE 199309L
+//#include <time.h>
 // Plusieurs variables globales statiques (pour qu'elles ne soient accessible que dans les
 // fonctions de ce fichier) sont declarees ici. Elle servent a conserver l'etat du tampon
 // circulaire ainsi qu'a mesurer certains elements utiles au calcul des statistiques.
@@ -47,19 +48,108 @@ int initTamponCirculaire(size_t taille){
     //
     // Les variables de statistiques
 
-    // TODO
+    // TODO (DONE)
+    // Mémoire du tampon circulaire
+    memoire = (char*)calloc(taille, sizeof(struct requete));
+    // on regarde si on renvoie une valeur null (donc le calloc s'est pas fait correctement)
+    if (memoire == NULL) {
+        return -1;
+    }
+    posLecture = 0;
+    posEcriture = 0;
+    longueurCourante = 0;
+
+    // Initialiser le mutex
+    if (pthread_mutex_init(&mutexTampon, NULL) != 0) {
+        free(memoire);
+        memoire = NULL;
+        return -1;
+    }
+
+    // Initialiser les statistiques
+    nombreRequetesRecues = 0;
+    nombreRequetesTraitees = 0;
+    nombreRequetesPerdues = 0;
+
+    tempsDebutPeriode = 0.0;
+    sommeTempsAttente = 0.0;
+    return 0;
 
 }
 
 void resetStats(){
+    // TODO (DONE)
     // Reinitialise les variables de statistique
-
-    // TODO
+    nombreRequetesRecues = 0;
+    nombreRequetesTraitees = 0;
+    nombreRequetesPerdues = 0;
 }
 
 void calculeStats(struct statistiques *stats){
     // TODO
-    
+    // Structure contenant les statistiques que vous devez calculer
+// Ces statistiques doivent etre calculees sur une periode de 2 secondes
+// (donc, par exemple, le nombre de requetes traitees est le nombre de
+// caracteres traites _dans les 2 dernieres secondes_) ou, si vous preferez,
+// depuis le dernier affichage de ces statistiques (qui se fait a toutes
+// les 2 secondes).
+// La plupart des champs ont des noms evocateurs, voyez les notes de cours sur
+// les files d'attente si la signification de lambda, mu et rho n'est pas claire.
+/* struct statistiques{
+    unsigned int nombreRequetesEnAttente;
+    unsigned int nombreRequetesTraitees;
+    unsigned int nombreRequetesPerdues;
+    double tempsTraitementMoyen;
+    double lambda;
+    double mu;
+    double rho;
+};
+*/
+    struct timespec ts;
+    double tempsActuel;
+    double deltaT;
+
+    pthread_mutex_lock(&mutexTampon);
+
+    // Aller chercher le temps actuel
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    tempsActuel = (double)ts.tv_sec + (double)ts.tv_nsec * 1e-9;
+
+    // Calculer la durée de la période
+    deltaT = tempsActuel - tempsDebutPeriode;
+    if (deltaT <= 0.0) {
+        deltaT = 1e-9;  // éviter une division par 0
+    }
+
+    // Remplir la structure de statistiques
+    stats->nombreRequetesEnAttente = longueurCourante;
+    stats->nombreRequetesTraitees = nombreRequetesTraitees;
+    stats->nombreRequetesPerdues = nombreRequetesPerdues;
+
+    if (nombreRequetesTraitees > 0) {
+        stats->tempsTraitementMoyen = sommeTempsAttente / nombreRequetesTraitees;
+    } else {
+        stats->tempsTraitementMoyen = 0.0;
+    }
+
+    stats->lambda = (double)nombreRequetesRecues / deltaT;
+    stats->mu = (double)nombreRequetesTraitees / deltaT;
+
+    if (stats->mu > 0.0) {
+        stats->rho = stats->lambda / stats->mu;
+    } else {
+        stats->rho = 0.0;
+    }
+
+    // Réinitialiser les compteurs pour la prochaine période
+    nombreRequetesRecues = 0;
+    nombreRequetesTraitees = 0;
+    nombreRequetesPerdues = 0;
+    sommeTempsAttente = 0.0;
+    tempsDebutPeriode = tempsActuel;
+
+    pthread_mutex_unlock(&mutexTampon);
+
 }
 
 int insererDonnee(struct requete *req){
@@ -78,29 +168,75 @@ int insererDonnee(struct requete *req){
     //
     // N'oubliez pas de proteger les operations qui le necessitent par un mutex!
    
-    // TODO
+    // TODO (DONE)
+    struct requete *destination;
+    pthread_mutex_lock(&mutexTampon);
+
+    // Trouver l'adresse de la case ou écrire
+    destination = (struct requete *)(memoire + posEcriture * sizeof(struct requete));
+
+    // Copier la requête dans le tampon
+    *destination = *req;
+
+    // Pour stats
+    nombreRequetesRecues++;
+    // Mise a jour variable global
+    posEcriture = (posEcriture + 1) % memoireTaille;
+    // Cas d'un tampon plein
+    if (memoireTaille == longueurCourante) {
+        // On peut pas traité la requete, elle est perdu
+        nombreRequetesPerdues++;
+        // On avance aussi le ptr de lecture, pcq lancien plus vieux est perdu
+        posLecture = (posLecture + 1) % memoireTaille;
+    } 
+    else { // Le tampon est pas plein
+        // On peut juste continuer d'increementer longueurCourante
+        longueurCourante++;
+    }
+
+    pthread_mutex_unlock(&mutexTampon);
+
+    return 0;
 }
 
 int consommerDonnee(struct requete *req){
-    // Dans cette fonction, vous devez :
-    //
-    // Determiner si une requete est disponible dans le tampon circulaire
-    //
-    // S'il n'y en a _pas_, retourner 0.
-    //
-    // S'il y en a une, alors :
-    //      Copier cette requete dans la structure passee en argument
-    //      Modifier la valeur de posLecture et longueurCourante
-    //      Mettre a jour les variables necessaires aux statistiques (comme sommeTempsAttente)
-    //      Retourner 1 pour indiquer qu'une requete disponible a ete copiee dans req.
-    //
-    // N'oubliez pas de proteger les operations qui le necessitent par un mutex!
+    struct requete *source;
+    struct timespec ts;
+    double tempsActuel;
+
+    pthread_mutex_lock(&mutexTampon);
+
+    // Vérifier si une requête est disponible
+    if (longueurCourante == 0) {
+        pthread_mutex_unlock(&mutexTampon);
+        return 0;
+    }
+
+    // Trouver la requête la plus ancienne
+    source = (struct requete *)(memoire + posLecture * sizeof(struct requete));
+
+    // Copier la requête vers la structure fournie
+    *req = *source;
+
+    // Mettre à jour les statistiques
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    tempsActuel = (double)ts.tv_sec + (double)ts.tv_nsec * 1e-9;
+
+    sommeTempsAttente += (tempsActuel - req->tempsReception);
+    nombreRequetesTraitees++;
+
+    // Mettre à jour le tampon circulaire
+    posLecture = (posLecture + 1) % memoireTaille;
+    longueurCourante--;
+
+    pthread_mutex_unlock(&mutexTampon);
+
+    return 1;
     
-    // TODO
 }
 
 unsigned int longueurFile(){
     // Retourne la longueur courante de la file contenue dans votre tampon circulaire.
     
-    // TODO
+    return longueurCourante;
 }
