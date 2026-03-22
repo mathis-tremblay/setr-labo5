@@ -77,6 +77,7 @@ static int asciiVersHid(char c, unsigned char *modificateur, unsigned char *code
         return 0;
     }
 
+    // Car que on traite pas
     return -1;
 }
 
@@ -84,8 +85,11 @@ int ecrireCaracteres(FILE* periphClavier, const char* caracteres, size_t len, un
     // TODO ecrivez votre code ici. Voyez les explications dans l'enonce et dans
     // emulateurClavier.h
     
-    // Compteur de caracteres
+    // Sert à parcourir le buffer caracteres (Indice)
     size_t i;
+
+    // Compteur de resultats (au debut on a rien ecrit)
+    int nbCaracteresEcrits = 0;
 
     // Si on a pas de peripherique ou pas de caracteres a ecrire
     if (periphClavier == NULL || caracteres == NULL) {
@@ -93,26 +97,50 @@ int ecrireCaracteres(FILE* periphClavier, const char* caracteres, size_t len, un
     }
 
     // On regarde pour chaque character dans caracteres
-    for (i = 0; i < len; i++) {
+    while(i < len) {
         // Cree 2 tableaux de 8 octets (tous a 0)
         unsigned char paquet[LONGUEUR_USB_PAQUET] = {0};
         unsigned char paquetVide[LONGUEUR_USB_PAQUET] = {0};
 
-        // Variable pour asciiVersHid
-        unsigned char modificateur;
-        unsigned char code;
+        // Nombre de touches qu'on a dans le paquet
+        int nbTouchesDansPaquet = 0;
 
+        // Variable pour asciiVersHid
+        unsigned char modificateurPaquet;
+        unsigned char code;
         // Securite de conversion
-        if (asciiVersHid(caracteres[i], &modificateur, &code) != 0) {
+        if (asciiVersHid(caracteres[i], &modificateurPaquet, &code) != 0) {
             return -1;
         }
 
-        paquet[0] = modificateur;  // 0 ou 2
+        paquet[0] = modificateurPaquet;  // 0 ou 2
         paquet[1] = 0;             // toujours 0
         paquet[2] = code;          // une touche envoyée
-        // paquet[3] à paquet[7] restent à 0
+        // Tant que on a encore des char a envoyer et que y reste de la place dans le paquet
+        // 8 octets, 2 sont deja utilise de base, on a de place pour 6 du meme type
+        while (i < len && nbTouchesDansPaquet < 6) {
+            unsigned char modificateurCourant;
+            unsigned char codeCourant;
 
-        // On regarde si les ecritures ont marcher (fwrite renvoit 1 en cas de succes)
+            // Conversion avec securite
+            if (asciiVersHid(caracteres[i], &modificateurCourant, &codeCourant) != 0) {
+                return -1;
+            }
+
+            // On break le while si on a un autre modificateur que celui du paquet
+            // Sinon on va pas ecrire les bons char (ex min a la place de MAJ)
+            if (modificateurCourant != modificateurPaquet) {
+                break;
+            }
+
+            // On place le code courant dans le paquet
+            paquet[2 + nbTouchesDansPaquet] = codeCourant;
+            nbTouchesDansPaquet++;
+            i++;
+            nbCaracteresEcrits++;
+        }
+
+        // On regarde si les ecritures ont marche (fwrite renvoit 1 en cas de success)
 
         // Ecriture (touche enfoncee)
         if (fwrite(paquet, LONGUEUR_USB_PAQUET, 1, periphClavier) != 1) {
@@ -126,5 +154,5 @@ int ecrireCaracteres(FILE* periphClavier, const char* caracteres, size_t len, un
         usleep(tempsTraitementParPaquetMicroSecondes);
     }
 
-    return (int)len;
+    return nbCaracteresEcrits;
 }
