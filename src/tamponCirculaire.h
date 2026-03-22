@@ -42,6 +42,9 @@ int insererDonnee(struct requete *req);
 // un mutex!
 int consommerDonnee(struct requete *req);
 
+// Enregistre le temps de service d'une requete traitee par le thread clavier
+void enregistrerTempsService(double tempsService);
+
 // Retourne la longueur courante de la file d'attente (le nombre de requetes en attente)
 unsigned int longueurFile();
 
