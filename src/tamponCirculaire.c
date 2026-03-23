@@ -27,6 +27,7 @@ static unsigned int posLecture, posEcriture, longueurCourante;
 // Mutex permettant de proteger les acces au tampon circulaire
 // N'oubliez pas que _deux_ threads vont tenter de faire des operations en parallele!
 pthread_mutex_t mutexTampon;
+static int mutexTamponInitialise = 0;
 
 // Pour les statistiques
 static unsigned int nombreRequetesRecues, nombreRequetesTraitees, nombreRequetesPerdues;
@@ -68,6 +69,7 @@ int initTamponCirculaire(size_t taille){
         memoire = NULL;
         return -1;
     }
+    mutexTamponInitialise = 1;
 
     // Initialiser les statistiques
     nombreRequetesRecues = 0;
@@ -139,7 +141,7 @@ void calculeStats(struct statistiques *stats){
 
     stats->lambda = (double)nombreRequetesRecues / deltaT;
     if (sommeTempsService > 0.0) {
-        stats->mu = (double)nombreRequetesTraitees / sommeTempsService;
+        stats->mu = 1/(stats->tempsTraitementMoyen);
     } else {
         stats->mu = 0.0;
     }
@@ -176,6 +178,12 @@ int insererDonnee(struct requete *req){
 
     // Trouver l'adresse de la case ou écrire
     destination = (struct requete *)(memoire + posEcriture * sizeof(struct requete));
+
+    // Si on ecrase une entree existante avec un buffer alloue, on le libere d'abord
+    if (longueurCourante == memoireTaille && destination->data != NULL) {
+        free(destination->data);
+        destination->data = NULL;
+    }
 
     // Copier la requête dans le tampon
     *destination = *req;
@@ -246,6 +254,26 @@ unsigned int longueurFile(){
 }
 
 void freeMemoireTampon(){
+    if (mutexTamponInitialise) {
+        pthread_mutex_lock(&mutexTampon);
+    }
+
+    // Liberer les buffers encore presents dans le tampon
+    for (unsigned int i = 0; i < longueurCourante; i++) {
+        unsigned int idx = (posLecture + i) % memoireTaille;
+        struct requete *r = (struct requete *)(memoire + idx * sizeof(struct requete));
+        free(r->data);
+        r->data = NULL;
+    }
+
     free(memoire);
+    memoire = NULL;
     memoireTaille = 0;
+    posLecture = 0;
+    posEcriture = 0;
+    longueurCourante = 0;
+
+    if (mutexTamponInitialise) {
+        pthread_mutex_unlock(&mutexTampon);
+    }
 }

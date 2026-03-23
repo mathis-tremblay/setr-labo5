@@ -43,7 +43,7 @@ static void* threadFonctionClavier(void* args){
         if(ret == 1){
             double debutService = get_time();
             int rep = ecrireCaracteres(infos->pointeurClavier, req.data, req.taille, infos->tempsTraitementParCaractereMicroSecondes);
-            double finService = get_time();
+            double finService = get_time(); // pour calcul de mu
 
             if(rep >= 0){
                 enregistrerTempsService(finService - debutService);
@@ -116,7 +116,7 @@ static void* threadFonctionLecture(void *args){
                 break;
             }
 
-            if (n == 0){
+            if (n == 0){ // EOF, le pipe a été fermé côté écriture
                 usleep(500);
                 continue;
             }
@@ -224,6 +224,8 @@ int main(int argc, char* argv[]){
     if (file_fd == NULL){
         perror("Erreur d'ouverture du clavier virtuel");
         close(fd);
+        pthread_barrier_destroy(&barriere);
+        freeMemoireTampon();
         return -1;
     }
     //printf("Clavier virtuel ouvert avec succès.\n");
