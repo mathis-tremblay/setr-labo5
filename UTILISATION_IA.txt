@@ -1,13 +1,13 @@
 Question 1 : Avez-vous utilisé un ou des outils d'IA pour ce laboratoire, même seulement en partie (oui/non)?
-
+Oui
 Répondez aux questions suivantes seulement si vous avez répondu "oui" à la question précédente.
 
 Question 2 : Quels modèles (ex., Claude Opus, Gemini Pro, GPT-Codex, etc.)?
-ChatGPT 5.2
-
+ChatGPT 5.2 (Guillaume)
+Github Copilote (Mathis)
 Question 3 : Pour la réalisation de quelles tâches en particulier? Donnez un exemple de "prompt" utilisé et de résultat.
 Ecriture de la fonction custom de convertion ASCII to HID, sa semblait comme une job de IA car c'est litteralement un dictionnaire de conversion (facile a faire sans faute pour un AI, et gros risque d'erreur d'inattention si fait par un humain).
 
 
 Question 4 : Avez-vous rencontré des problèmes lors de l'utilisation de l'IA (mauvaise compréhension des commandes fournies, résultats erronés, etc.)? Qu'avez-vous fait pour les régler?
-test commit
+Oui, les valeurs des calculs des statistiques des files d'attentes a été fait initialement par l'IA, mais ces calculs n'etait pas bon. Nous avons donc tout refais a bras en se fiant au Power Point.
